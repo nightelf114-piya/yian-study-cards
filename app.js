@@ -75,7 +75,7 @@ function updateStats(){
   $('doneCount').textContent=`${done} / ${n} 已讀`;$('percent').textContent=`${pct}%`;
   $('progressFill').style.width=pct+'%';
   const id=currentFallback();
-  $('resumeLabel').textContent=id?`繼續第 ${id} 張`:'目前沒有可閱讀的圖卡';$('resume').disabled=!id;
+  $('resumeLabel').textContent=id?`繼續第 ${id} 張`:'目前沒有可閱讀的圖卡';$('resume').disabled=!id;$('homeJumpBtn').disabled=!id;
 }
 function render(){
   updateStats();const list=activeFilter(visible);
@@ -367,7 +367,38 @@ async function loadLibrary(){
     notify(`無法使用圖片管理：${e.message}。原有圖卡仍可閱讀。`);
   }
 }
+function setupCardJump(){
+  const dialog=$('jumpDialog'), input=$('jumpInput'), error=$('jumpError');
+  const clearError=()=>{
+    error.textContent='';
+    input.removeAttribute('aria-invalid');
+  };
+  const openJump=()=>{
+    input.value='';
+    clearError();
+    dialog.showModal();
+  };
+  $('homeJumpBtn').onclick=openJump;
+  $('readerJumpBtn').onclick=openJump;
+  $('closeJump').onclick=()=>dialog.close();
+  input.oninput=clearError;
+  $('jumpForm').onsubmit=event=>{
+    event.preventDefault();
+    const value=input.value.trim().normalize('NFKC');
+    const id=Number(value);
+    if(!/^\d+$/.test(value)||!Number.isSafeInteger(id)||id<1||!byId.has(id)||hidden.has(id)){
+      error.textContent=hidden.has(id)?'這張圖卡已隱藏。請到圖片管理重新顯示。':'找不到這個圖卡編號，請重新輸入。';
+      input.setAttribute('aria-invalid','true');
+      input.focus();
+      return;
+    }
+    dialog.close();
+    openCard(id);
+    $('readerJumpBtn').focus();
+  };
+}
 function setup(){
+  setupCardJump();
   $('resume').onclick=()=>{const id=currentFallback();if(id)openCard(id);};
   $('searchInput').oninput=e=>{term=e.target.value;render();};
   $('clearSearch').onclick=()=>{$('searchInput').value='';term='';render();};
@@ -394,7 +425,7 @@ function setup(){
   let tx=0,ty=0;
   $('readerScroll').addEventListener('touchstart',e=>{if(e.touches.length!==1)return;tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
   $('readerScroll').addEventListener('touchend',e=>{if(zoom>1||!tx||e.changedTouches.length!==1)return;const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.5)moveReader(dx<0?1:-1);tx=0;},{passive:true});
-  window.addEventListener('keydown',e=>{if(!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape')closeCard();else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
+  window.addEventListener('keydown',e=>{if($('jumpDialog').open||!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape')closeCard();else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
   window.addEventListener('hashchange',()=>{const match=location.hash.match(/card-(\d+)/);if(match&&!current)openCard(Number(match[1]));});
   rebuildCatalog();loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)openCard(Number(match[1]));});
   if('serviceWorker'in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('./sw.js').catch(()=>{});

@@ -22,7 +22,10 @@
     <div class="hero-top"><div><div class="eyebrow">你的專屬學習圖庫</div><h1>從故事記住職安觀念</h1><p>依序閱讀、放大細節、收藏重點，下次從上次位置繼續。</p></div><span class="hero-illustration">📚</span></div>
     <div class="progress-text"><strong id="doneCount">0 / 195 已讀</strong><span id="percent">0%</span></div>
     <div class="progress-track"><div id="progressFill"></div></div>
-    <button id="resume" class="resume">▶ <span id="resumeLabel">開始第 1 張</span></button>
+    <div class="resume-actions">
+      <button id="resume" class="resume">▶ <span id="resumeLabel">開始第 1 張</span></button>
+      <button id="homeJumpBtn" class="home-jump" type="button" aria-haspopup="dialog">跳到第幾張</button>
+    </div>
   </section>
   <section class="notice">提示：圖卡是 PDF 教材的故事化整理，<b>不等於全部現行法規已經逐條校對</b>；若原始教材數字有修訂，應優先核對主管機關公告。</section>
   <section class="catalog">
@@ -42,10 +45,21 @@
   </section>
 </main>
 <section id="reader" class="reader" hidden aria-label="圖卡閱讀介面" aria-modal="true" role="dialog">
-  <div class="reader-head"><button id="readerBack" class="reader-back" aria-label="回到目錄">← 目錄</button><div class="reader-title"><b id="readerNumber">第 1 張</b><small id="readerTitle">圖片名稱</small></div><button id="readerFav" class="reader-round" aria-label="收藏這張圖">☆</button></div>
+  <div class="reader-head"><button id="readerBack" class="reader-back" aria-label="回到目錄">← 目錄</button><div class="reader-title"><b id="readerNumber">第 1 張</b><small id="readerTitle">圖片名稱</small></div><button id="readerJumpBtn" class="reader-jump" type="button" aria-haspopup="dialog">跳到第幾張</button><button id="readerFav" class="reader-round" aria-label="收藏這張圖">☆</button></div>
   <div id="readerScroll" class="reader-scroll"><div id="readerImageWrap" class="reader-image-wrap"><img id="readerImage" alt="圖卡內容" decoding="async" draggable="false"></div></div>
   <div class="reader-foot"><div class="reader-tools"><button id="prevBtn" aria-label="上一張">‹ <span>上一張</span></button><button id="zoomOut" aria-label="縮小">−</button><span id="zoomLabel" class="zoom-label">100%</span><button id="zoomIn" aria-label="放大">＋</button><button id="nextBtn" aria-label="下一張"><span>下一張</span> ›</button></div><div class="reader-bottom-actions"><button id="doneBtn" class="done-btn">✓ 標記已讀</button><button id="readerManage" class="reader-manage" type="button">管理此張</button></div><div class="reader-tip">左右滑動換張・點 ＋ 放大後可拖曳查看・進度保存在此裝置</div></div>
 </section>
+<dialog id="jumpDialog" class="jump-dialog" aria-labelledby="jumpTitle">
+  <form id="jumpForm">
+    <div class="dialog-head"><h2 id="jumpTitle">跳到第幾張</h2><button id="closeJump" type="button" aria-label="關閉跳頁">✕</button></div>
+    <label for="jumpInput">輸入圖卡編號</label>
+    <div class="jump-fields">
+      <input id="jumpInput" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" placeholder="例如 151" aria-describedby="jumpError" autofocus>
+      <button type="submit">前往</button>
+    </div>
+    <p id="jumpError" role="alert"></p>
+  </form>
+</dialog>
 <div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-label="設定"><div class="dialog-mask" id="settingsMask"></div><div class="dialog-body"><div class="dialog-head"><h2>閱讀器設定</h2><button id="closeSettings" aria-label="關閉">✕</button></div><p>內建的 195 張圖卡可以快取離線閱讀。你新增或替換的圖片會保存在本機圖片資料庫（同一支手機、同一個網站）；不會寫入伺服器 images 資料夾。</p><button id="offlineBtn" class="action-btn">⬇ 儲存內建圖卡供離線使用</button><div id="offlineStatus" class="status"></div><hr><h3>完整圖片備份（建議定期匯出）</h3>
   <p>將新增圖片、替換圖片、隱藏設定和學習紀錄一起匯出成 ZIP。換手機時可用 ZIP 還原；原本 195 張內建圖卡仍由網站提供。</p>
   <div class="dialog-actions"><button id="backupLibraryBtn" type="button">⬇ 匯出完整備份 ZIP</button><label class="file-input">⬆ 匯入完整備份 ZIP<input id="restoreLibraryInput" type="file" accept=".zip,application/zip"></label></div>

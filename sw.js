@@ -1,4 +1,4 @@
-const VERSION='aan-shell-2026-11-v3-image-manager',MEDIA='aan-media-2026-11';
+const VERSION='aan-shell-2026-11-v4-card-jump',MEDIA='aan-media-2026-11';
 const CORE=['./','./index.html','./styles.css','./app.js','./data.js','./image-library.js','./zip-store.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
