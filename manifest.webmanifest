@@ -1,7 +1,7 @@
 {
-  "name": "乙安故事記憶圖｜195 張手機閱讀器",
+  "name": "乙安故事記憶圖｜303 張手機閱讀器",
   "short_name": "乙安圖卡",
-  "description": "離線學習與閱讀 195 張乙級職安衛故事記憶圖卡",
+  "description": "離線學習與閱讀 303 張乙級職安衛故事記憶圖卡",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

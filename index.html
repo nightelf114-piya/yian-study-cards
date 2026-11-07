@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#12365d">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="乙安故事記憶圖手機閱讀器，支援新增、替換、隱藏或刪除圖片，以及收藏、進度、放大與離線閱讀。">
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="manifest.webmanifest?v=6">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css?v=5">
@@ -14,13 +14,13 @@
 </head>
 <body>
 <header class="site-header">
-  <div class="brand"><span class="logo">安</span><div><strong>乙安故事記憶圖</strong><small id="brandSub">195 張內建圖卡・可新增自己的圖片</small></div></div>
+  <div class="brand"><span class="logo">安</span><div><strong>乙安故事記憶圖</strong><small id="brandSub">303 張內建圖卡・可新增自己的圖片</small></div></div>
   <div class="header-actions"><button id="installBtn" class="small-btn" title="加入手機主畫面">＋ 安裝</button><button id="settingsBtn" class="small-btn" title="設定與資料備份">⚙</button></div>
 </header>
-<main id="home">
+<main id="home" inert>
   <section class="hero">
     <div class="hero-top"><div><div class="eyebrow">你的專屬學習圖庫</div><h1>從故事記住職安觀念</h1><p>依序閱讀、放大細節、收藏重點，下次從上次位置繼續。</p></div><span class="hero-illustration">📚</span></div>
-    <div class="progress-text"><strong id="doneCount">0 / 195 已讀</strong><span id="percent">0%</span></div>
+    <div class="progress-text"><strong id="doneCount">0 / 303 已讀</strong><span id="percent">0%</span></div>
     <div class="progress-track"><div id="progressFill"></div></div>
     <div class="resume-actions">
       <button id="resume" class="resume">▶ <span id="resumeLabel">開始第 1 張</span></button>
@@ -35,6 +35,7 @@
     <label class="search-box" for="searchInput"><span>⌕</span><input id="searchInput" autocomplete="off" placeholder="搜尋編號或圖卡標題，例如：起重機、59、鍋爐"><button id="clearSearch" aria-label="清除搜尋" type="button">×</button></label>
     <div class="filters" id="filters">
       <button data-filter="all" class="chip active">全部</button>
+      <button data-filter="supplement" class="chip">法規補充</button>
       <button data-filter="unread" class="chip">未完成</button>
       <button data-filter="read" class="chip">已完成</button>
       <button data-filter="favorite" class="chip">★ 收藏</button><button data-filter="custom" class="chip">我新增的</button>
@@ -60,15 +61,15 @@
     <p id="jumpError" role="alert"></p>
   </form>
 </dialog>
-<div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-label="設定"><div class="dialog-mask" id="settingsMask"></div><div class="dialog-body"><div class="dialog-head"><h2>閱讀器設定</h2><button id="closeSettings" aria-label="關閉">✕</button></div><p>內建的 195 張圖卡可以快取離線閱讀。你新增或替換的圖片會保存在本機圖片資料庫（同一支手機、同一個網站）；不會寫入伺服器 images 資料夾。</p><button id="offlineBtn" class="action-btn">⬇ 儲存內建圖卡供離線使用</button><div id="offlineStatus" class="status"></div><hr><h3>完整圖片備份（建議定期匯出）</h3>
-  <p>將新增圖片、替換圖片、隱藏設定和學習紀錄一起匯出成 ZIP。換手機時可用 ZIP 還原；原本 195 張內建圖卡仍由網站提供。</p>
+<div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-label="設定"><div class="dialog-mask" id="settingsMask"></div><div class="dialog-body"><div class="dialog-head"><h2>閱讀器設定</h2><button id="closeSettings" aria-label="關閉">✕</button></div><p>內建的 303 張圖卡可以快取離線閱讀。你新增或替換的圖片會保存在本機圖片資料庫（同一支手機、同一個網站）；不會寫入伺服器 images 資料夾。</p><button id="offlineBtn" class="action-btn">⬇ 儲存內建圖卡供離線使用</button><div id="offlineStatus" class="status"></div><hr><h3>完整圖片備份（建議定期匯出）</h3>
+  <p>將新增圖片、替換圖片、隱藏設定和學習紀錄一起匯出成 ZIP。換手機時可用 ZIP 還原；原本 303 張內建圖卡仍由網站提供。</p>
   <div class="dialog-actions"><button id="backupLibraryBtn" type="button">⬇ 匯出完整備份 ZIP</button><label class="file-input">⬆ 匯入完整備份 ZIP<input id="restoreLibraryInput" type="file" accept=".zip,application/zip"></label></div>
   <div id="backupStatus" class="status"></div>
   <hr><h3>備份學習紀錄</h3><p>收藏與已讀進度儲存在手機瀏覽器；更換手機或清除網站資料可能遺失，可以先匯出備份。</p><div class="dialog-actions"><button id="exportBtn">匯出進度 JSON</button><label class="file-input">匯入進度 JSON<input id="importInput" type="file" accept="application/json,.json"></label></div><hr><button id="resetBtn" class="danger">清除已讀與收藏紀錄</button><p class="footnote">新增與刪除只影響本機資料；清除網站資料、換手機、移除 App 或瀏覽器回收空間都可能讓自訂圖片消失。內建圖片的「刪除」是隱藏，可隨時還原；匯出備份 ZIP 比只備份進度 JSON 更完整。</p><p class="footnote">iPhone／Android 請先將這個網站放在 HTTPS 網址，再透過瀏覽器的「加入主畫面／安裝」功能使用；直接打開本機 HTML 不能保證有離線快取與安裝功能。</p></div></div>
 <div id="libraryManager" class="dialog" hidden role="dialog" aria-modal="true" aria-label="新增與管理圖片">
  <div class="dialog-mask" id="libraryMask"></div><div class="dialog-body manager-body">
   <div class="dialog-head"><h2>圖片管理</h2><button id="closeLibrary" aria-label="關閉圖片管理">✕</button></div>
-  <p>可一次新增多張 PNG、JPG 或 WebP。內建 195 張可「隱藏」或「替換」，不會真的刪除網站原圖；自己新增的圖片可永久刪除。</p>
+  <p>可一次新增多張 PNG、JPG 或 WebP。內建 303 張可「隱藏」或「替換」，不會真的刪除網站原圖；自己新增的圖片可永久刪除。</p>
   <button id="managerAddBtn" class="action-btn" type="button">＋ 從手機或電腦選取圖片</button>
   <div id="managerStatus" class="status"></div>
   <div class="manager-controls"><input id="managerSearch" type="search" placeholder="搜尋圖卡名稱／編號" aria-label="搜尋圖卡"><select id="managerFilter" aria-label="選擇管理範圍"><option value="all">全部</option><option value="custom">我新增的</option><option value="replaced">已替換</option><option value="hidden">已隱藏</option><option value="builtins">原有圖卡</option></select></div>
@@ -80,8 +81,9 @@
 <input id="addImagesInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden>
 <input id="replaceImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<script src="data.js"></script>
-<script src="image-library.js"></script>
+<script src="data.js?v=6"></script>
+<script src="supplement.js?v=6"></script>
+<script src="image-library.js?v=6"></script>
 <script src="zip-store.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body></html>

@@ -1,17 +1,12 @@
 'use strict';
 (() => {
 const BUILTIN = window.CARDS || [];
-const BASE_COUNT = BUILTIN.length;
-const KEY='aan-study-progress-v1', STORE=window.AANLibrary, ZIP=window.AANZip;
+const BASE_COUNT = BUILTIN.length, ORIGINAL_COUNT=195;
+const KEY='aan-study-progress-v2', LEGACY_KEY='aan-study-progress-v1', STORE=window.AANLibrary, ZIP=window.AANZip;
 const $=id=>document.getElementById(id);
 const read=new Set(), favs=new Set();
 const state={last:1};
-try {
-  const saved=JSON.parse(localStorage.getItem(KEY)||'{}');
-  if(Array.isArray(saved.read))saved.read.filter(Number.isInteger).forEach(id=>read.add(id));
-  if(Array.isArray(saved.favorites))saved.favorites.filter(Number.isInteger).forEach(id=>favs.add(id));
-  if(Number.isInteger(saved.last)&&saved.last>0)state.last=saved.last;
-}catch(_error){}
+let legacyCardIds=new Map(), legacyProgressPending=false;
 let photoRows=[], hidden=new Set(), nextId=BASE_COUNT+1;
 let catalog=[...BUILTIN], visible=[...BUILTIN], byId=new Map(catalog.map(c=>[c.id,c]));
 let objectUrls=[], current=0, term='', range='all', filter='all', zoom=1, toastTimer=null;
@@ -19,7 +14,38 @@ let libraryAvailable=false, busy=false, deferredPrompt=null, replaceTarget=null;
 
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4300);}
 function make(tag,cl,txt){const e=document.createElement(tag);if(cl)e.className=cl;if(txt!=null)e.textContent=txt;return e;}
-function saveProgress(){try{localStorage.setItem(KEY,JSON.stringify({read:[...read],favorites:[...favs],last:state.last,updated:new Date().toISOString()}));}catch(e){notify('進度儲存失敗，手機儲存空間可能不足。');}}
+function saveProgress(){try{localStorage.setItem(KEY,JSON.stringify({...progressData(),legacyProgressPending,updated:new Date().toISOString()}));}catch(e){notify('進度儲存失敗，手機儲存空間可能不足。');}}
+function applyProgress(data, sourceCount=BASE_COUNT, idChanges=legacyCardIds, known=null){
+  const resolveId=id=>sourceCount<BASE_COUNT
+    ? idChanges.get(id)??(id>sourceCount&&id<=BASE_COUNT?0:id)
+    : id;
+  const valid=id=>Number.isSafeInteger(id)&&id>0&&(!known||known.has(id));
+  for(const [values,target] of [[data.read,read],[data.favorites,favs]]){
+    if(!Array.isArray(values))continue;
+    for(const value of values){
+      const id=resolveId(value);
+      if(valid(id))target.add(id);
+    }
+  }
+  const last=resolveId(data.last);
+  if(valid(last))state.last=last;
+}
+function loadProgress(libraryLoaded){
+  try{
+    const saved=JSON.parse(localStorage.getItem(KEY)||'null');
+    const legacy=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null');
+    legacyProgressPending=!libraryLoaded&&!!legacy&&(!saved||saved.legacyProgressPending);
+    if(saved){
+      applyProgress(saved);
+      if(libraryLoaded&&saved.legacyProgressPending&&legacy){
+        const customOnly=values=>Array.isArray(values)?values.filter(id=>id>ORIGINAL_COUNT):[];
+        applyProgress({read:customOnly(legacy.read),favorites:customOnly(legacy.favorites)},ORIGINAL_COUNT);
+      }
+    }else if(legacy){
+      applyProgress(legacy,ORIGINAL_COUNT);
+    }
+  }catch(_error){}
+}
 function pad(id){return String(id).padStart(3,'0');}
 function currentFallback(){return visible.some(c=>c.id===state.last)?state.last:visible[0]?.id||0;}
 function currentCard(){return byId.get(current);}
@@ -31,6 +57,7 @@ function activeFilter(cards){
     if(range!=='all'&&range!=='custom') {const [a,b]=range.split('-').map(Number);if(c.id<a||c.id>b)return false;}
     if(range==='custom'&&!isLocal(c))return false;
     if(filter==='custom'&&!isLocal(c))return false;
+    if(filter==='supplement'&&(isLocal(c)||c.id<=ORIGINAL_COUNT))return false;
     if(filter==='read'&&!read.has(c.id))return false;
     if(filter==='unread'&&read.has(c.id))return false;
     if(filter==='favorite'&&!favs.has(c.id))return false;
@@ -269,15 +296,16 @@ async function restoreOriginal(id){
 }
 function download(blob,filename){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),120000);}
 function progressData(){return {read:[...read],favorites:[...favs],last:state.last};}
-function exportProgress(){download(new Blob([JSON.stringify({type:'aan-progress',version:1,...progressData()},null,2)],{type:'application/json'}),'乙安閱讀進度.json');notify('已匯出閱讀進度 JSON');}
+function exportProgress(){download(new Blob([JSON.stringify({type:'aan-progress',version:1,baseCount:BASE_COUNT,...progressData()},null,2)],{type:'application/json'}),'乙安閱讀進度.json');notify('已匯出閱讀進度 JSON');}
 async function importProgress(event){
   const file=event.target.files?.[0];event.target.value='';if(!file)return;
   try{
     const data=JSON.parse(await file.text());if(data.type!=='aan-progress'||!Array.isArray(data.read)||!Array.isArray(data.favorites))throw Error('備份格式不符');
     if(!confirm('確定以這份 JSON 覆蓋目前的閱讀進度與收藏嗎？'))return;
     read.clear();favs.clear();const known=new Set(catalog.map(c=>c.id));
-    data.read.forEach(id=>{if(known.has(id))read.add(id);});data.favorites.forEach(id=>{if(known.has(id))favs.add(id);});
-    state.last=known.has(data.last)?data.last:currentFallback();saveProgress();render();notify('進度已還原');
+    state.last=currentFallback();
+    applyProgress(data,data.baseCount??ORIGINAL_COUNT,legacyCardIds,known);
+    legacyProgressPending=false;saveProgress();render();notify('進度已還原');
   }catch(e){notify(`匯入失敗：${e.message}`);}
 }
 function extFor(type){return {'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/avif':'avif','image/gif':'gif'}[type]||'png';}
@@ -309,30 +337,31 @@ async function restoreLibrary(event){
     const json=files.get('library.json');if(!json)throw Error('備份缺少 library.json');
     const backup=JSON.parse(new TextDecoder().decode(json));
     if(backup.type!=='aan-local-library-backup'||backup.version!==2||!Array.isArray(backup.photos)||!Array.isArray(backup.hidden))throw Error('備份格式不符');
-    if(backup.baseCount!==BASE_COUNT)throw Error('內建圖卡版本不一致，請使用對應的閱讀器版本還原');
+    if(backup.baseCount!==ORIGINAL_COUNT&&backup.baseCount!==BASE_COUNT)throw Error('內建圖卡版本不一致，請使用對應的閱讀器版本還原');
     if(backup.photos.length>5000)throw Error('備份圖片數量異常');
     const ids=new Set(),rows=[];
     for(const p of backup.photos){
       if(!Number.isSafeInteger(p.id)||p.id<1||ids.has(p.id))throw Error('圖片編號不正確或重複');
-      if((p.id<=BASE_COUNT&&p.kind!=='replacement')||(p.id>BASE_COUNT&&p.kind!=='custom'))throw Error('圖片來源資料不正確');
+      if((p.id<=backup.baseCount&&p.kind!=='replacement')||(p.id>backup.baseCount&&p.kind!=='custom'))throw Error('圖片來源資料不正確');
       ids.add(p.id);
       if(!IMAGE_TYPES.has(p.mime)||typeof p.title!=='string'||p.title.length>100)throw Error('圖片格式或名稱錯誤');
       const image=files.get(p.image),thumb=files.get(p.thumb);if(!image||!thumb||image.length>60*1024*1024)throw Error('缺少圖片或檔案過大');
       rows.push({id:p.id,kind:p.kind,title:p.title,name:p.name||'',mime:p.mime,blob:new Blob([image],{type:p.mime}),thumb:new Blob([thumb],{type:p.thumbMime||'image/webp'}),added:p.added||''});
     }
-    const hiddenIds=backup.hidden.filter(id=>Number.isInteger(id)&&id>=1&&id<=BASE_COUNT);
+    const idChanges=STORE.planCardIds(rows,BASE_COUNT);
+    for(const row of rows)row.id=idChanges.get(row.id)??row.id;
+    const hiddenIds=backup.hidden.filter(id=>Number.isInteger(id)&&id>=1&&id<=backup.baseCount);
     const maxId=Math.max(BASE_COUNT,...rows.map(r=>r.id));
     const newNext=Math.max(maxId+1,Number.isInteger(backup.nextId)?backup.nextId:BASE_COUNT+1);
     if(!confirm(`這份備份包含 ${rows.length} 筆本機圖片、${hiddenIds.length} 個隱藏設定。\n\n還原會「取代」本裝置目前所有自行新增／替換的圖片及閱讀進度，確定繼續？`))return;
     $('backupStatus').textContent='正在還原圖片；請勿關閉頁面…';
-    await STORE.restore(rows,hiddenIds,newNext);
-    photoRows=await STORE.allPhotos();hidden=new Set(hiddenIds);nextId=newNext;
+    await STORE.restore(rows,hiddenIds,newNext,idChanges);
+    photoRows=await STORE.allPhotos();hidden=new Set(hiddenIds);nextId=newNext;legacyCardIds=idChanges;
     if(backup.progress&&Array.isArray(backup.progress.read)&&Array.isArray(backup.progress.favorites)){
       read.clear();favs.clear();
       const ids=new Set([...BUILTIN.map(c=>c.id),...rows.filter(p=>p.kind==='custom').map(p=>p.id)]);
-      backup.progress.read.forEach(id=>{if(ids.has(id))read.add(id);});
-      backup.progress.favorites.forEach(id=>{if(ids.has(id))favs.add(id);});
-      state.last=ids.has(backup.progress.last)?backup.progress.last:1;saveProgress();
+      state.last=1;applyProgress(backup.progress,backup.baseCount,idChanges,ids);
+      legacyProgressPending=false;saveProgress();
     }
     rebuildCatalog();$('backupStatus').textContent=`完成：已還原 ${rows.length} 筆本機圖片與學習進度。`;
     notify('完整圖片備份已還原');
@@ -360,12 +389,16 @@ async function loadLibrary(){
     hidden=new Set((await STORE.getSettings('hidden',[])).filter(id=>Number.isInteger(id)&&id<=BASE_COUNT&&id>=1));
     const storedNext=await STORE.getSettings('nextId',BASE_COUNT+1);
     nextId=Math.max(BASE_COUNT+1,Number.isInteger(storedNext)?storedNext:BASE_COUNT+1,...photoRows.map(p=>p.id+1));
-    libraryAvailable=true;rebuildCatalog();
+    legacyCardIds=new Map(await STORE.getSettings('legacyCardIds',[]));
+    libraryAvailable=true;
   }catch(e){
-    libraryAvailable=false;rebuildCatalog();
+    libraryAvailable=false;
+    photoRows=[];hidden=new Set();
     $('addImagesBtn').disabled=true;$('manageImagesBtn').disabled=true;
     notify(`無法使用圖片管理：${e.message}。原有圖卡仍可閱讀。`);
   }
+  loadProgress(libraryAvailable);rebuildCatalog();
+  $('home').inert=false;
 }
 function setupCardJump(){
   const dialog=$('jumpDialog'), input=$('jumpInput'), error=$('jumpError');
@@ -428,7 +461,7 @@ function setup(){
   $('readerScroll').addEventListener('touchend',e=>{if(zoom>1||!tx||e.changedTouches.length!==1)return;const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.5)moveReader(dx<0?1:-1);tx=0;},{passive:true});
   window.addEventListener('keydown',e=>{if($('jumpDialog')?.open||!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape')closeCard();else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
   window.addEventListener('hashchange',()=>{const match=location.hash.match(/card-(\d+)/);if(match&&!current)openCard(Number(match[1]));});
-  rebuildCatalog();loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)openCard(Number(match[1]));});
+  loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)openCard(Number(match[1]));});
   if('serviceWorker'in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 setup();

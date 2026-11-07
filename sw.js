@@ -1,5 +1,5 @@
-const VERSION='aan-shell-2026-11-v5-card-jump',MEDIA='aan-media-2026-11';
-const CORE=['./','./index.html','./styles.css?v=5','./app.js?v=5','./data.js','./image-library.js','./zip-store.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+const VERSION='aan-shell-2026-11-v6-law-cards',MEDIA='aan-media-2026-11';
+const CORE=['./','./index.html','./styles.css?v=5','./app.js?v=6','./data.js?v=6','./supplement.js?v=6','./image-library.js?v=6','./zip-store.js','./manifest.webmanifest?v=6','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
 });
