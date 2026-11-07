@@ -1,0 +1,25 @@
+{
+  "name": "乙安故事記憶圖｜195 張手機閱讀器",
+  "short_name": "乙安圖卡",
+  "description": "離線學習與閱讀 195 張乙級職安衛故事記憶圖卡",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fa",
+  "theme_color": "#12365d",
+  "lang": "zh-TW",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
