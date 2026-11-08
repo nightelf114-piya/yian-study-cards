@@ -10,6 +10,7 @@ let legacyCardIds=new Map(), legacyProgressPending=false;
 let photoRows=[], hidden=new Set(), nextId=BASE_COUNT+1;
 let catalog=[...BUILTIN], visible=[...BUILTIN], byId=new Map(catalog.map(c=>[c.id,c]));
 let objectUrls=[], current=0, term='', range='all', filter='all', zoom=1, toastTimer=null;
+let fitScreen=false;
 let libraryAvailable=false, busy=false, deferredPrompt=null, replaceTarget=null;
 
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4300);}
@@ -121,11 +122,88 @@ function render(){
   }
   $('cards').replaceChildren(frag);
 }
-function setZoom(z){
-  zoom=Math.max(1,Math.min(3,Math.round(z*10)/10));
-  const wrap=$('readerImageWrap'),img=$('readerImage');wrap.classList.toggle('zoomed',zoom>1);
-  img.style.width=zoom===1?'':`${Math.round(zoom*100)}%`;
-  img.style.maxWidth=zoom===1?'':'none';$('zoomLabel').textContent=Math.round(zoom*100)+'%';
+function screenFitZoom(){
+  const scroll=$('readerScroll'),img=$('readerImage');
+  const baseHeight=img.getBoundingClientRect().height/zoom;
+  if(!img.naturalWidth||!baseHeight)return 1;
+  const padding=getComputedStyle($('readerImageWrap'));
+  const available=scroll.clientHeight-parseFloat(padding.paddingTop)-parseFloat(padding.paddingBottom);
+  return Math.min(1,Math.max(1,available-1)/baseHeight);
+}
+function setZoom(value, from, to){
+  const scroll=$('readerScroll'),img=$('readerImage');
+  const before=img.getBoundingClientRect(),viewport=scroll.getBoundingClientRect();
+  const anchor=from||{x:viewport.left+scroll.clientWidth/2,y:viewport.top+scroll.clientHeight/2};
+  const target=to||anchor;
+  const minimum=Math.min(.25,screenFitZoom());
+  zoom=Math.max(minimum,Math.min(3,value));
+  img.style.setProperty('--reader-zoom',zoom);
+  const after=img.getBoundingClientRect();
+  if(before.width&&before.height){
+    scroll.scrollLeft+=after.left+(anchor.x-before.left)*after.width/before.width-target.x;
+    scroll.scrollTop+=after.top+(anchor.y-before.top)*after.height/before.height-target.y;
+  }
+  $('zoomLabel').textContent=Math.round(zoom*100)+'%';
+  if($('fitLabel'))$('fitLabel').textContent=fitScreen?'適合寬度':'看全圖';
+  $('zoomOut').disabled=zoom<=minimum+.001;
+  $('zoomIn').disabled=zoom>=3;
+}
+function fitReader(){
+  setZoom(fitScreen?screenFitZoom():1);
+  $('readerScroll').scrollTo(0,0);
+}
+function zoomReader(factor){
+  fitScreen=false;
+  setZoom(zoom*factor);
+}
+function setupReaderZoom(){
+  const scroll=$('readerScroll'),img=$('readerImage');
+  $('zoomIn').onclick=()=>zoomReader(1.25);
+  $('zoomOut').onclick=()=>zoomReader(.8);
+  $('zoomFit')?.addEventListener('click',()=>{fitScreen=!fitScreen;fitReader();});
+  img.ondblclick=event=>{
+    const restoreWidth=zoom>1;
+    fitScreen=false;
+    setZoom(restoreWidth?1:2,{x:event.clientX,y:event.clientY});
+  };
+  const refit=()=>{if(current&&fitScreen)fitReader();};
+  img.addEventListener('load',refit);
+  if('ResizeObserver'in window)new ResizeObserver(refit).observe(scroll);
+
+  let swipe=null,pinch=null;
+  const point=touch=>({x:touch.clientX,y:touch.clientY});
+  const midpoint=touches=>{
+    const a=touches[0],b=touches[1];
+    return {
+      x:(a.clientX+b.clientX)/2,
+      y:(a.clientY+b.clientY)/2,
+      distance:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)
+    };
+  };
+  scroll.addEventListener('touchstart',event=>{
+    const touches=event.touches;
+    swipe=touches.length===1?point(touches[0]):null;
+    pinch=touches.length===2?midpoint(touches):null;
+    if(pinch&&event.cancelable)event.preventDefault();
+  },{passive:false});
+  scroll.addEventListener('touchmove',event=>{
+    if(event.touches.length!==2)return;
+    if(event.cancelable)event.preventDefault();
+    const next=midpoint(event.touches);
+    if(pinch?.distance&&next.distance){
+      fitScreen=false;
+      setZoom(zoom*next.distance/pinch.distance,pinch,next);
+    }
+    pinch=next;
+  },{passive:false});
+  scroll.addEventListener('touchend',event=>{
+    pinch=null;
+    if(event.touches.length||!swipe)return;
+    const end=point(event.changedTouches[0]),dx=end.x-swipe.x,dy=end.y-swipe.y;
+    swipe=null;
+    if(zoom<=1&&Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.5)moveReader(dx<0?1:-1);
+  },{passive:true});
+  scroll.addEventListener('touchcancel',()=>{swipe=null;pinch=null;});
 }
 function openCard(id){
   const c=byId.get(id);if(!c||hidden.has(id))return;
@@ -139,13 +217,12 @@ function openCard(id){
   $('doneBtn').textContent=read.has(id)?'✓ 已讀完成｜點此取消':'✓ 標記已讀完成';
   $('doneBtn').classList.toggle('is-done',read.has(id));
   $('prevBtn').disabled=index<=0;$('nextBtn').disabled=index===visible.length-1;
-  $('reader').hidden=false;document.body.style.overflow='hidden';setZoom(1);
-  $('readerScroll').scrollTop=0;$('readerScroll').scrollLeft=0;
+  $('reader').hidden=false;document.body.style.overflow='hidden';fitReader();
   try{history.replaceState(null,'',`#card-${id}`);}catch(_e){}
   const next=visible[index+1];if(next){const preload=new Image();preload.src=next.img;}
 }
 function closeCard(){
-  current=0;$('reader').hidden=true;document.body.style.overflow='';
+  current=0;fitScreen=false;$('reader').hidden=true;document.body.style.overflow='';
   try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}
   render();
 }
@@ -441,8 +518,7 @@ function setup(){
   $('randomBtn').onclick=()=>{if(visible.length)openCard(visible[Math.floor(Math.random()*visible.length)].id);};
   $('readerBack').onclick=closeCard;$('prevBtn').onclick=()=>moveReader(-1);$('nextBtn').onclick=()=>moveReader(1);
   $('readerFav').onclick=toggleFav;$('doneBtn').onclick=markRead;
-  $('zoomIn').onclick=()=>setZoom(zoom+.5);$('zoomOut').onclick=()=>setZoom(zoom-.5);
-  $('readerImage').ondblclick=()=>setZoom(zoom===1?2:1);
+  setupReaderZoom();
   $('readerManage').onclick=()=>{const id=current;openManager(id);};
   $('settingsBtn').onclick=openSettings;$('settingsMask').onclick=closeSettings;$('closeSettings').onclick=closeSettings;
   $('offlineBtn').onclick=downloadOffline;$('exportBtn').onclick=exportProgress;$('importInput').onchange=importProgress;
@@ -456,9 +532,6 @@ function setup(){
   $('addImagesInput').onchange=addImages;$('replaceImageInput').onchange=replaceImage;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;});
   $('installBtn').onclick=async()=>{if(deferredPrompt){await deferredPrompt.prompt();deferredPrompt=null;}else notify('iPhone：Safari 分享 → 加入主畫面；Android：Chrome 選單 → 安裝 App／新增至主畫面');};
-  let tx=0,ty=0;
-  $('readerScroll').addEventListener('touchstart',e=>{if(e.touches.length!==1)return;tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
-  $('readerScroll').addEventListener('touchend',e=>{if(zoom>1||!tx||e.changedTouches.length!==1)return;const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.5)moveReader(dx<0?1:-1);tx=0;},{passive:true});
   window.addEventListener('keydown',e=>{if($('jumpDialog')?.open||!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape')closeCard();else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
   window.addEventListener('hashchange',()=>{const match=location.hash.match(/card-(\d+)/);if(match&&!current)openCard(Number(match[1]));});
   loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)openCard(Number(match[1]));});

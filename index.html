@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=6">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=7">
   <title>乙安故事記憶圖｜可新增刪除圖片的手機閱讀器</title>
 </head>
 <body>
@@ -48,7 +48,7 @@
 <section id="reader" class="reader" hidden aria-label="圖卡閱讀介面" aria-modal="true" role="dialog">
   <div class="reader-head"><button id="readerBack" class="reader-back" aria-label="回到目錄">← 目錄</button><div class="reader-title"><b id="readerNumber">第 1 張</b><small id="readerTitle">圖片名稱</small></div><button id="readerJumpBtn" class="reader-jump" type="button" aria-haspopup="dialog">跳到第幾張</button><button id="readerFav" class="reader-round" aria-label="收藏這張圖">☆</button></div>
   <div id="readerScroll" class="reader-scroll"><div id="readerImageWrap" class="reader-image-wrap"><img id="readerImage" alt="圖卡內容" decoding="async" draggable="false"></div></div>
-  <div class="reader-foot"><div class="reader-tools"><button id="prevBtn" aria-label="上一張">‹ <span>上一張</span></button><button id="zoomOut" aria-label="縮小">−</button><span id="zoomLabel" class="zoom-label">100%</span><button id="zoomIn" aria-label="放大">＋</button><button id="nextBtn" aria-label="下一張"><span>下一張</span> ›</button></div><div class="reader-bottom-actions"><button id="doneBtn" class="done-btn">✓ 標記已讀</button><button id="readerManage" class="reader-manage" type="button">管理此張</button></div><div class="reader-tip">左右滑動換張・點 ＋ 放大後可拖曳查看・進度保存在此裝置</div></div>
+  <div class="reader-foot"><div class="reader-tools"><button id="prevBtn" aria-label="上一張">‹ <span>上一張</span></button><button id="zoomOut" aria-label="縮小">−</button><button id="zoomFit" class="zoom-fit" type="button"><span id="fitLabel">看全圖</span><span id="zoomLabel" class="zoom-label">100%</span></button><button id="zoomIn" aria-label="放大">＋</button><button id="nextBtn" aria-label="下一張"><span>下一張</span> ›</button></div><div class="reader-bottom-actions"><button id="doneBtn" class="done-btn">✓ 標記已讀</button><button id="readerManage" class="reader-manage" type="button">管理此張</button></div><div class="reader-tip">雙指縮放・放大後拖曳查看・原寬時左右滑動換張</div></div>
 </section>
 <dialog id="jumpDialog" class="jump-dialog" aria-labelledby="jumpTitle">
   <form id="jumpForm">
@@ -85,5 +85,5 @@
 <script src="supplement.js?v=6"></script>
 <script src="image-library.js?v=6"></script>
 <script src="zip-store.js"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body></html>
