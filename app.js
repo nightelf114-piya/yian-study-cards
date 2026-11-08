@@ -3,6 +3,7 @@
 const BUILTIN = window.CARDS || [];
 const BASE_COUNT = BUILTIN.length, ORIGINAL_COUNT=195;
 const KEY='aan-study-progress-v2', LEGACY_KEY='aan-study-progress-v1', STORE=window.AANLibrary, ZIP=window.AANZip;
+const VIEW_KEY='aan-reader-position-v1';
 const $=id=>document.getElementById(id);
 const read=new Set(), favs=new Set();
 const state={last:1};
@@ -10,7 +11,7 @@ let legacyCardIds=new Map(), legacyProgressPending=false;
 let photoRows=[], hidden=new Set(), nextId=BASE_COUNT+1;
 let catalog=[...BUILTIN], visible=[...BUILTIN], byId=new Map(catalog.map(c=>[c.id,c]));
 let objectUrls=[], current=0, term='', range='all', filter='all', zoom=1, toastTimer=null;
-let fitScreen=false;
+let fitScreen=false, readerQueue=null, pendingPosition=null, positionTimer=null;
 let libraryAvailable=false, busy=false, deferredPrompt=null, replaceTarget=null;
 
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4300);}
@@ -53,7 +54,14 @@ function currentCard(){return byId.get(current);}
 function isLocal(c){return c?.kind==='custom';}
 function isReplaced(id){return photoRows.some(p=>p.id===id&&p.kind==='replacement');}
 function isHidden(id){return hidden.has(id);}
+function searchTerm(value){
+  return value.trim().normalize('NFKC').toLocaleLowerCase('zh-Hant-TW');
+}
+function matchesCard(card, query){
+  return !query||searchTerm(card.title).includes(query)||String(card.id).includes(query)||pad(card.id).includes(query);
+}
 function activeFilter(cards){
+  const query=searchTerm(term);
   return cards.filter(c=>{
     if(range!=='all'&&range!=='custom') {const [a,b]=range.split('-').map(Number);if(c.id<a||c.id>b)return false;}
     if(range==='custom'&&!isLocal(c))return false;
@@ -62,8 +70,7 @@ function activeFilter(cards){
     if(filter==='read'&&!read.has(c.id))return false;
     if(filter==='unread'&&read.has(c.id))return false;
     if(filter==='favorite'&&!favs.has(c.id))return false;
-    const q=term.trim().toLocaleLowerCase('zh-Hant-TW');
-    return !q||c.title.toLocaleLowerCase('zh-Hant-TW').includes(q)||String(c.id).includes(q)||pad(c.id).includes(q);
+    return matchesCard(c,query);
   });
 }
 function rebuildCatalog(){
@@ -118,9 +125,46 @@ function render(){
     tile.append(meta,make('div','tile-title',c.title));
     const st=make('div','tile-status');st.append(make('span',read.has(c.id)?'status-done':'',read.has(c.id)?'✓ 已完成':'○ 未完成'));
     st.append(make('span','tile-fav',favs.has(c.id)?'★':''));tile.append(st);
-    tile.addEventListener('click',()=>openCard(c.id));frag.append(tile);
+    tile.addEventListener('click',()=>startReading(c.id,list.length===visible.length?null:list));frag.append(tile);
   }
   $('cards').replaceChildren(frag);
+}
+function savedReaderPosition(id){
+  try{
+    const saved=JSON.parse(localStorage.getItem(VIEW_KEY)||'null');
+    if(saved?.id===id&&[saved.zoom,saved.left,saved.top].every(Number.isFinite))return saved;
+  }catch(_error){}
+  return null;
+}
+function saveReaderPosition(){
+  clearTimeout(positionTimer);
+  const scroll=$('readerScroll'),img=$('readerImage');
+  if(!current||pendingPosition||!img.complete||!img.naturalWidth)return;
+  const left=scroll.scrollLeft/Math.max(1,scroll.scrollWidth-scroll.clientWidth);
+  const top=scroll.scrollTop/Math.max(1,scroll.scrollHeight-scroll.clientHeight);
+  try{
+    localStorage.setItem(VIEW_KEY,JSON.stringify({id:current,zoom,fitScreen,left,top,queue:readerQueue}));
+  }catch(_error){}
+}
+function queueReaderPosition(){
+  if(!current||pendingPosition)return;
+  clearTimeout(positionTimer);
+  positionTimer=setTimeout(saveReaderPosition,180);
+}
+function readerImageReady(){
+  const scroll=$('readerScroll'),img=$('readerImage');
+  if(!current||!img.complete||!img.naturalWidth)return;
+  const saved=pendingPosition;
+  pendingPosition=null;
+  if(fitScreen)fitReader();
+  else if(saved){
+    setZoom(saved.zoom);
+    scroll.scrollTo(
+      saved.left*(scroll.scrollWidth-scroll.clientWidth),
+      saved.top*(scroll.scrollHeight-scroll.clientHeight)
+    );
+  }
+  queueReaderPosition();
 }
 function screenFitZoom(){
   const scroll=$('readerScroll'),img=$('readerImage');
@@ -147,6 +191,7 @@ function setZoom(value, from, to){
   if($('fitLabel'))$('fitLabel').textContent=fitScreen?'適合寬度':'看全圖';
   $('zoomOut').disabled=zoom<=minimum+.001;
   $('zoomIn').disabled=zoom>=3;
+  queueReaderPosition();
 }
 function fitReader(){
   setZoom(fitScreen?screenFitZoom():1);
@@ -167,7 +212,10 @@ function setupReaderZoom(){
     setZoom(restoreWidth?1:2,{x:event.clientX,y:event.clientY});
   };
   const refit=()=>{if(current&&fitScreen)fitReader();};
-  img.addEventListener('load',refit);
+  img.addEventListener('load',readerImageReady);
+  scroll.addEventListener('scroll',queueReaderPosition,{passive:true});
+  window.addEventListener('pagehide',saveReaderPosition);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)saveReaderPosition();});
   if('ResizeObserver'in window)new ResizeObserver(refit).observe(scroll);
 
   let swipe=null,pinch=null;
@@ -205,33 +253,78 @@ function setupReaderZoom(){
   },{passive:true});
   scroll.addEventListener('touchcancel',()=>{swipe=null;pinch=null;});
 }
-function openCard(id){
-  const c=byId.get(id);if(!c||hidden.has(id))return;
+function readerCards(){
+  if(!readerQueue)return visible;
+  return readerQueue.map(id=>byId.get(id)).filter(card=>card&&!isHidden(card.id));
+}
+function startReading(id, cards=null, resume=false){
+  const saved=resume?savedReaderPosition(id):null;
+  readerQueue=cards?cards.map(card=>card.id):null;
+  if(Array.isArray(saved?.queue)&&saved.queue.includes(id))readerQueue=saved.queue;
+  openCard(id,saved);
+}
+function updateReaderStatus(){
+  const favorite=favs.has(current),done=read.has(current);
+  $('readerFav').textContent=favorite?'★':'☆';
+  $('readerFav').setAttribute('aria-label',favorite?'取消收藏':'加入收藏');
+  $('readerFav').setAttribute('aria-pressed',String(favorite));
+  const button=$('doneBtn');
+  button.textContent=done?'已讀✓':'已讀';
+  button.setAttribute('aria-label',done?'取消已讀':'標記已讀');
+  button.setAttribute('aria-pressed',String(done));
+  button.classList.toggle('is-done',done);
+}
+function closeReaderMenu(){
+  const menu=$('readerMore');
+  if(menu)menu.open=false;
+}
+function openCard(id,saved=null){
+  const card=byId.get(id);
+  if(!card||isHidden(id))return;
+  clearTimeout(positionTimer);
+  pendingPosition=saved;
   current=id;state.last=id;saveProgress();
-  const index=visible.findIndex(x=>x.id===id);
-  $('readerNumber').textContent=`第 ${id} 號｜${index+1} / ${visible.length}`;
-  $('readerTitle').textContent=c.title;
-  $('readerImage').src=c.img;$('readerImage').alt=`第 ${id} 張：${c.title}`;
-  $('readerFav').textContent=favs.has(id)?'★':'☆';
-  $('readerFav').setAttribute('aria-label',favs.has(id)?'取消收藏':'加入收藏');
-  $('doneBtn').textContent=read.has(id)?'✓ 已讀完成｜點此取消':'✓ 標記已讀完成';
-  $('doneBtn').classList.toggle('is-done',read.has(id));
-  $('prevBtn').disabled=index<=0;$('nextBtn').disabled=index===visible.length-1;
-  $('reader').hidden=false;document.body.style.overflow='hidden';fitReader();
+  const cards=readerCards(),index=cards.findIndex(item=>item.id===id);
+  $('readerNumber').textContent=`第 ${id} 號｜${readerQueue?'清單 ':''}${index+1} / ${cards.length}`;
+  $('readerTitle').textContent=card.title;
+  $('readerImage').src=card.img;$('readerImage').alt=`第 ${id} 張：${card.title}`;
+  updateReaderStatus();
+  closeReaderMenu();
+  $('prevBtn').disabled=index<=0;$('nextBtn').disabled=index>=cards.length-1;
+  $('reader').hidden=false;document.body.style.overflow='hidden';
+  if(saved)fitScreen=saved.fitScreen===true;
+  fitReader();
+  readerImageReady();
   try{history.replaceState(null,'',`#card-${id}`);}catch(_e){}
-  const next=visible[index+1];if(next){const preload=new Image();preload.src=next.img;}
+  const next=cards[index+1];if(next){const preload=new Image();preload.src=next.img;}
 }
 function closeCard(){
-  current=0;fitScreen=false;$('reader').hidden=true;document.body.style.overflow='';
+  saveReaderPosition();
+  current=0;fitScreen=false;pendingPosition=null;readerQueue=null;
+  closeReaderMenu();
+  $('reader').hidden=true;document.body.style.overflow='';
   try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}
   render();
 }
 function moveReader(delta){
-  const index=visible.findIndex(c=>c.id===current),next=visible[index+delta];
-  if(index<0||!next)return;openCard(next.id);
+  const cards=readerCards();
+  const index=cards.findIndex(card=>card.id===current),next=cards[index+delta];
+  if(index<0||!next)return;
+  openCard(next.id);
 }
-function markRead(){if(!current)return;if(read.has(current))read.delete(current);else{read.add(current);notify('已標記完成！');}saveProgress();openCard(current);}
-function toggleFav(){if(!current)return;if(favs.has(current)){favs.delete(current);notify('已取消收藏');}else{favs.add(current);notify('已加入收藏');}saveProgress();openCard(current);}
+function markRead(){
+  if(!current)return;
+  if(read.has(current))read.delete(current);else{read.add(current);notify('已標記完成！');}
+  saveProgress();
+  updateReaderStatus();
+}
+function toggleFav(){
+  if(!current)return;
+  if(favs.has(current)){favs.delete(current);notify('已取消收藏');}
+  else{favs.add(current);notify('已加入收藏');}
+  saveProgress();
+  updateReaderStatus();
+}
 function openSettings(){$('settings').hidden=false;$('offlineStatus').textContent='';}
 function closeSettings(){$('settings').hidden=true;}
 function openManager(focusId){
@@ -478,52 +571,82 @@ async function loadLibrary(){
   $('home').inert=false;
 }
 function setupCardJump(){
-  const dialog=$('jumpDialog'), input=$('jumpInput'), error=$('jumpError');
+  const dialog=$('jumpDialog'),input=$('jumpInput'),error=$('jumpError'),results=$('jumpResults');
   if(!dialog)return;
-  const clearError=()=>{
+  const select=(id,cards=null)=>{
+    dialog.close();
+    startReading(id,cards);
+    $('readerJumpBtn').focus();
+  };
+  const updateResults=()=>{
     error.textContent='';
     input.removeAttribute('aria-invalid');
+    const query=searchTerm(input.value);
+    if(!query||/^\d+$/.test(query)){
+      results?.replaceChildren();
+      return [];
+    }
+    const cards=visible.filter(card=>matchesCard(card,query));
+    if(!results)return cards;
+    const fragment=document.createDocumentFragment();
+    fragment.append(make('p','jump-count',cards.length?`找到 ${cards.length} 張圖卡`:'找不到符合的圖卡'));
+    for(const card of cards){
+      const button=make('button','jump-result',`#${pad(card.id)}　${card.title}`);
+      button.type='button';
+      button.onclick=()=>select(card.id,cards);
+      fragment.append(button);
+    }
+    results.replaceChildren(fragment);
+    results.scrollTop=0;
+    return cards;
   };
   const openJump=()=>{
+    closeReaderMenu();
     input.value='';
-    clearError();
+    updateResults();
     dialog.showModal();
   };
   $('homeJumpBtn').onclick=openJump;
   $('readerJumpBtn').onclick=openJump;
   $('closeJump').onclick=()=>dialog.close();
-  input.oninput=clearError;
+  input.oninput=updateResults;
   $('jumpForm').onsubmit=event=>{
     event.preventDefault();
-    const value=input.value.trim().normalize('NFKC');
-    const id=Number(value);
-    if(!/^\d+$/.test(value)||!Number.isSafeInteger(id)||id<1||!byId.has(id)||hidden.has(id)){
-      error.textContent=hidden.has(id)?'這張圖卡已隱藏。請到圖片管理重新顯示。':'找不到這個圖卡編號，請重新輸入。';
-      input.setAttribute('aria-invalid','true');
-      input.focus();
-      return;
+    const query=searchTerm(input.value);
+    if(/^\d+$/.test(query)){
+      const id=Number(query);
+      if(Number.isSafeInteger(id)&&byId.has(id)&&!isHidden(id))return select(id);
+      error.textContent=isHidden(id)?'這張圖卡已隱藏。請到圖片管理重新顯示。':'找不到這個圖卡編號。';
+    }else{
+      const cards=updateResults();
+      if(cards.length===1||(!results&&cards.length))return select(cards[0].id,cards);
+      if(cards.length>1){results.querySelector('button').focus();return;}
+      error.textContent=query?'請換一個關鍵字再試。':'請輸入圖卡編號或關鍵字。';
     }
-    dialog.close();
-    openCard(id);
-    $('readerJumpBtn').focus();
+    input.setAttribute('aria-invalid','true');
+    input.focus();
   };
 }
 function setup(){
   setupCardJump();
-  $('resume').onclick=()=>{const id=currentFallback();if(id)openCard(id);};
+  $('resume').onclick=()=>{const id=currentFallback();if(id)startReading(id,null,true);};
   $('searchInput').oninput=e=>{term=e.target.value;render();};
   $('clearSearch').onclick=()=>{$('searchInput').value='';term='';render();};
   $('rangeSelect').onchange=e=>{range=e.target.value;render();};
   $('filters').addEventListener('click',e=>{const b=e.target.closest('[data-filter]');if(!b)return;filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(node=>node.classList.toggle('active',node===b));render();});
-  $('randomBtn').onclick=()=>{if(visible.length)openCard(visible[Math.floor(Math.random()*visible.length)].id);};
+  $('randomBtn').onclick=()=>{if(visible.length)startReading(visible[Math.floor(Math.random()*visible.length)].id);};
   $('readerBack').onclick=closeCard;$('prevBtn').onclick=()=>moveReader(-1);$('nextBtn').onclick=()=>moveReader(1);
   $('readerFav').onclick=toggleFav;$('doneBtn').onclick=markRead;
   setupReaderZoom();
-  $('readerManage').onclick=()=>{const id=current;openManager(id);};
+  $('readerManage').onclick=()=>{const id=current;closeReaderMenu();openManager(id);};
+  const menu=$('readerMore');
+  if(menu)document.addEventListener('click',event=>{if(menu.open&&!menu.contains(event.target))closeReaderMenu();});
   $('settingsBtn').onclick=openSettings;$('settingsMask').onclick=closeSettings;$('closeSettings').onclick=closeSettings;
   $('offlineBtn').onclick=downloadOffline;$('exportBtn').onclick=exportProgress;$('importInput').onchange=importProgress;
   $('backupLibraryBtn').onclick=backupLibrary;$('restoreLibraryInput').onchange=restoreLibrary;
-  $('resetBtn').onclick=()=>{if(!confirm('確定清除這支手機所有已讀與收藏紀錄？圖片不會刪除。'))return;read.clear();favs.clear();state.last=1;saveProgress();closeSettings();render();notify('學習進度已清除');};
+  $('resetBtn').onclick=()=>{if(!confirm('確定清除這支手機所有已讀與收藏紀錄？圖片不會刪除。'))return;read.clear();favs.clear();state.last=1;
+    try{localStorage.removeItem(VIEW_KEY);}catch(_error){}
+    saveProgress();closeSettings();render();notify('學習進度已清除');};
   $('addImagesBtn').onclick=()=>$('addImagesInput').click();
   $('managerAddBtn').onclick=()=>$('addImagesInput').click();
   $('manageImagesBtn').onclick=()=>openManager();
@@ -532,9 +655,9 @@ function setup(){
   $('addImagesInput').onchange=addImages;$('replaceImageInput').onchange=replaceImage;
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;});
   $('installBtn').onclick=async()=>{if(deferredPrompt){await deferredPrompt.prompt();deferredPrompt=null;}else notify('iPhone：Safari 分享 → 加入主畫面；Android：Chrome 選單 → 安裝 App／新增至主畫面');};
-  window.addEventListener('keydown',e=>{if($('jumpDialog')?.open||!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape')closeCard();else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
-  window.addEventListener('hashchange',()=>{const match=location.hash.match(/card-(\d+)/);if(match&&!current)openCard(Number(match[1]));});
-  loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)openCard(Number(match[1]));});
+  window.addEventListener('keydown',e=>{if($('jumpDialog')?.open||!$('libraryManager').hidden||!$('settings').hidden)return;if(current){if(e.key==='Escape'){if(menu?.open)closeReaderMenu();else closeCard();}else if(e.key==='ArrowLeft')moveReader(-1);else if(e.key==='ArrowRight')moveReader(1);}});
+  window.addEventListener('hashchange',()=>{const match=location.hash.match(/card-(\d+)/);if(match&&!current)startReading(Number(match[1]));});
+  loadLibrary().then(()=>{const match=location.hash.match(/card-(\d+)/);if(match)startReading(Number(match[1]),null,true);});
   if('serviceWorker'in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 setup();

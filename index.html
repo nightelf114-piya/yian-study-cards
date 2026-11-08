@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.webmanifest?v=6">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
   <title>乙安故事記憶圖｜可新增刪除圖片的手機閱讀器</title>
 </head>
 <body>
@@ -46,19 +46,37 @@
   </section>
 </main>
 <section id="reader" class="reader" hidden aria-label="圖卡閱讀介面" aria-modal="true" role="dialog">
-  <div class="reader-head"><button id="readerBack" class="reader-back" aria-label="回到目錄">← 目錄</button><div class="reader-title"><b id="readerNumber">第 1 張</b><small id="readerTitle">圖片名稱</small></div><button id="readerJumpBtn" class="reader-jump" type="button" aria-haspopup="dialog">跳到第幾張</button><button id="readerFav" class="reader-round" aria-label="收藏這張圖">☆</button></div>
+  <div class="reader-head"><button id="readerBack" class="reader-back" aria-label="回到目錄">← 目錄</button><div class="reader-title"><b id="readerNumber">第 1 張</b><small id="readerTitle">圖片名稱</small></div><button id="readerJumpBtn" class="reader-jump" type="button" aria-haspopup="dialog">找圖卡</button><button id="readerFav" class="reader-round" aria-label="收藏這張圖">☆</button>
+    <details id="readerMore" class="reader-more">
+      <summary aria-label="更多閱讀操作">⋯</summary>
+      <div class="reader-more-panel">
+        <button id="readerManage" class="reader-manage" type="button">管理此張</button>
+        <p>雙指縮放，放大後可拖曳。原寬時左右滑動換張。</p>
+      </div>
+    </details>
+  </div>
   <div id="readerScroll" class="reader-scroll"><div id="readerImageWrap" class="reader-image-wrap"><img id="readerImage" alt="圖卡內容" decoding="async" draggable="false"></div></div>
-  <div class="reader-foot"><div class="reader-tools"><button id="prevBtn" aria-label="上一張">‹ <span>上一張</span></button><button id="zoomOut" aria-label="縮小">−</button><button id="zoomFit" class="zoom-fit" type="button"><span id="fitLabel">看全圖</span><span id="zoomLabel" class="zoom-label">100%</span></button><button id="zoomIn" aria-label="放大">＋</button><button id="nextBtn" aria-label="下一張"><span>下一張</span> ›</button></div><div class="reader-bottom-actions"><button id="doneBtn" class="done-btn">✓ 標記已讀</button><button id="readerManage" class="reader-manage" type="button">管理此張</button></div><div class="reader-tip">雙指縮放・放大後拖曳查看・原寬時左右滑動換張</div></div>
+  <div class="reader-foot">
+    <div class="reader-tools">
+      <button id="prevBtn" class="reader-page" aria-label="上一張">‹ <span>上一張</span></button>
+      <button id="zoomOut" aria-label="縮小">−</button>
+      <button id="zoomFit" class="zoom-fit" type="button"><span id="fitLabel">看全圖</span><span id="zoomLabel" class="zoom-label">100%</span></button>
+      <button id="zoomIn" aria-label="放大">＋</button>
+      <button id="doneBtn" class="done-btn" aria-label="標記已讀" aria-pressed="false">已讀</button>
+      <button id="nextBtn" class="reader-page" aria-label="下一張"><span>下一張</span> ›</button>
+    </div>
+  </div>
 </section>
 <dialog id="jumpDialog" class="jump-dialog" aria-labelledby="jumpTitle">
   <form id="jumpForm">
-    <div class="dialog-head"><h2 id="jumpTitle">跳到第幾張</h2><button id="closeJump" type="button" aria-label="關閉跳頁">✕</button></div>
-    <label for="jumpInput">輸入圖卡編號</label>
+    <div class="dialog-head"><h2 id="jumpTitle">找圖卡</h2><button id="closeJump" type="button" aria-label="關閉找圖卡">✕</button></div>
+    <label for="jumpInput">輸入圖卡編號或關鍵字</label>
     <div class="jump-fields">
-      <input id="jumpInput" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" placeholder="例如 151" aria-describedby="jumpError" autofocus>
+      <input id="jumpInput" type="search" enterkeyhint="search" autocomplete="off" placeholder="例如 151、起重機" aria-describedby="jumpError" autofocus>
       <button type="submit">前往</button>
     </div>
     <p id="jumpError" role="alert"></p>
+    <div id="jumpResults" class="jump-results" aria-label="搜尋結果"></div>
   </form>
 </dialog>
 <div id="settings" class="dialog" hidden role="dialog" aria-modal="true" aria-label="設定"><div class="dialog-mask" id="settingsMask"></div><div class="dialog-body"><div class="dialog-head"><h2>閱讀器設定</h2><button id="closeSettings" aria-label="關閉">✕</button></div><p>內建的 303 張圖卡可以快取離線閱讀。你新增或替換的圖片會保存在本機圖片資料庫（同一支手機、同一個網站）；不會寫入伺服器 images 資料夾。</p><button id="offlineBtn" class="action-btn">⬇ 儲存內建圖卡供離線使用</button><div id="offlineStatus" class="status"></div><hr><h3>完整圖片備份（建議定期匯出）</h3>
@@ -85,5 +103,5 @@
 <script src="supplement.js?v=6"></script>
 <script src="image-library.js?v=6"></script>
 <script src="zip-store.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body></html>

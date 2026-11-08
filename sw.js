@@ -1,5 +1,5 @@
-const VERSION='aan-shell-2026-11-v7-reader-zoom',MEDIA='aan-media-2026-11';
-const CORE=['./','./index.html','./styles.css?v=7','./app.js?v=7','./data.js?v=6','./supplement.js?v=6','./image-library.js?v=6','./zip-store.js','./manifest.webmanifest?v=6','./icon-192.png','./icon-512.png'];
+const VERSION='aan-shell-2026-11-v8-reader-flow',MEDIA='aan-media-2026-11';
+const CORE=['./','./index.html','./styles.css?v=8','./app.js?v=8','./data.js?v=6','./supplement.js?v=6','./image-library.js?v=6','./zip-store.js','./manifest.webmanifest?v=6','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
 });
